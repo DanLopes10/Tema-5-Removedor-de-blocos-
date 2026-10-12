@@ -6,6 +6,21 @@ const MODES = {
 
 const PALETTE = [0xff4757, 0x2ed573, 0x1e90ff, 0xffa502, 0xa55eea, 0xffeb3b];
 
+const UPGRADES = [
+  { id: 'double', icon: '💥', name: 'Golpe duplo', desc: 'Cada acerto quebra +1 bloco da cor-alvo', max: 3 },
+  { id: 'explosion', icon: '🧨', name: 'Explosão', desc: 'Acertos também quebram vizinhos da mesma cor', max: 2 },
+  { id: 'slow', icon: '🐌', name: 'Câmera lenta', desc: 'O relógio corre 30% mais devagar', max: 3 },
+  { id: 'hourglass', icon: '⏳', name: 'Ampulheta', desc: '+2s a cada acerto', max: 3 },
+  { id: 'shield', icon: '🛡️', name: 'Escudo', desc: 'Bloqueia o próximo erro', max: 3 },
+  { id: 'xray', icon: '👁️', name: 'Raio-X', desc: 'Blocos de outras cores ficam translúcidos', max: 1 },
+  { id: 'combo', icon: '🔥', name: 'Combo', desc: '+50% de pontos em cada acerto', max: 3 },
+  { id: 'time', icon: '🕒', name: 'Tempo extra', desc: '+10 segundos agora', max: 99 }
+];
+
+function emptyUpgrades() {
+  return { double: 0, explosion: 0, slow: 0, hourglass: 0, shield: 0, xray: 0, combo: 0, time: 0 };
+}
+
 const el = (id) => document.getElementById(id);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -105,7 +120,10 @@ const game = {
   cubes: [],
   removing: [],
   hovered: null,
-  lastTick: 0
+  lastTick: 0,
+  elapsed: 0,
+  nextCard: 0,
+  upgrades: emptyUpgrades()
 };
 
 function hexToCss(value) {
@@ -149,6 +167,7 @@ function chooseTarget() {
   const colors = [...new Set(aliveCubes().map((cube) => cube.userData.colorIndex))];
   game.target = colors[Math.floor(Math.random() * colors.length)];
   el('swatch').style.background = hexToCss(PALETTE[game.target]);
+  refreshXray();
 }
 
 function refreshHud() {
@@ -157,10 +176,32 @@ function refreshHud() {
 }
 
 function removeCube(cube) {
-  cube.userData.removed = true;
-  game.removing.push(cube);
   game.streak += 1;
-  game.score += 100 + (game.streak - 1) * 20;
+  const broken = new Set([cube]);
+  const sameColor = aliveCubes().filter((other) => other.userData.colorIndex === game.target);
+
+  if (game.upgrades.explosion > 0) {
+    const radius = 1.2 + 0.5 * (game.upgrades.explosion - 1);
+    sameColor.forEach((other) => {
+      if (other.position.distanceTo(cube.position) <= radius) broken.add(other);
+    });
+  }
+
+  sameColor
+    .filter((other) => !broken.has(other))
+    .sort(() => Math.random() - 0.5)
+    .slice(0, game.upgrades.double)
+    .forEach((other) => broken.add(other));
+
+  broken.forEach((item) => {
+    item.userData.removed = true;
+    game.removing.push(item);
+  });
+
+  const multiplier = 1 + 0.5 * game.upgrades.combo;
+  game.score += Math.round(broken.size * (100 + (game.streak - 1) * 20) * multiplier);
+  game.timeLeft += 2 * game.upgrades.hourglass;
+
   if (aliveCubes().length === 0) {
     finishGame(true);
     return;
@@ -169,6 +210,15 @@ function removeCube(cube) {
 }
 
 function penalize(cube) {
+  if (game.upgrades.shield > 0) {
+    game.upgrades.shield -= 1;
+    renderPerks();
+    cube.material.emissive.setHex(0x1e90ff);
+    setTimeout(() => {
+      if (!cube.userData.removed) cube.material.emissive.setHex(0x000000);
+    }, 200);
+    return;
+  }
   game.streak = 0;
   game.score = Math.max(0, game.score - 50);
   game.timeLeft = Math.max(0, game.timeLeft - 3);
@@ -178,13 +228,74 @@ function penalize(cube) {
   }, 200);
 }
 
+function refreshXray() {
+  const active = game.upgrades.xray > 0;
+  game.cubes.forEach((cube) => {
+    if (cube.userData.removed) return;
+    const dimmed = active && cube.userData.colorIndex !== game.target;
+    cube.material.transparent = active;
+    cube.material.opacity = dimmed ? 0.25 : 1;
+    cube.material.depthWrite = !dimmed;
+    cube.material.needsUpdate = true;
+  });
+}
+
+function renderPerks() {
+  el('perks').innerHTML = UPGRADES.filter((item) => game.upgrades[item.id] > 0)
+    .map((item) => `<span>${item.icon} ${game.upgrades[item.id]}</span>`)
+    .join('');
+}
+
+function scheduleCard() {
+  game.nextCard = game.elapsed + 12 + Math.random() * 10;
+}
+
+function showCards() {
+  game.state = 'cards';
+  const pool = UPGRADES.filter((item) => game.upgrades[item.id] < item.max)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 2);
+  const cards = pool
+    .map(
+      (item) => `
+      <button class="card" onclick="pickUpgrade('${item.id}')">
+        <span class="icon">${item.icon}</span>
+        <b>${item.name}</b>
+        <span>${item.desc}</span>
+      </button>`
+    )
+    .join('');
+  el('box').innerHTML = `<h1>✨ Escolha uma melhoria</h1><div class="cards">${cards}</div>`;
+  el('overlay').style.display = 'flex';
+}
+
+function pickUpgrade(id) {
+  if (id === 'time') {
+    game.timeLeft += 10;
+  } else {
+    game.upgrades[id] += 1;
+  }
+  scheduleCard();
+  el('overlay').style.display = 'none';
+  renderPerks();
+  refreshXray();
+  refreshHud();
+  game.lastTick = performance.now();
+  game.state = 'play';
+}
+
 function startGame(modeKey) {
   game.mode = modeKey;
   game.score = 0;
   game.streak = 0;
   game.timeLeft = MODES[modeKey].time;
+  game.elapsed = 0;
+  game.upgrades = emptyUpgrades();
+  scheduleCard();
   buildCubes(modeKey);
   chooseTarget();
+  el('perks').style.display = 'flex';
+  renderPerks();
   el('overlay').style.display = 'none';
   el('hud').style.display = 'flex';
   refreshHud();
@@ -197,6 +308,7 @@ function finishGame(won) {
   const bonus = won ? Math.round(game.timeLeft) * 10 : 0;
   game.score += bonus;
   el('hud').style.display = 'none';
+  el('perks').style.display = 'none';
   el('overlay').style.display = 'flex';
   el('box').innerHTML = `
     <h1>${won ? '🎉 Você venceu!' : '⏰ Tempo esgotado'}</h1>
@@ -207,8 +319,10 @@ function finishGame(won) {
 }
 
 function updateTimer(now) {
-  game.timeLeft -= (now - game.lastTick) / 1000;
+  const real = (now - game.lastTick) / 1000;
   game.lastTick = now;
+  game.elapsed += real;
+  game.timeLeft -= real * Math.pow(0.7, game.upgrades.slow);
   if (game.timeLeft <= 0) {
     game.timeLeft = 0;
     refreshHud();
@@ -216,6 +330,7 @@ function updateTimer(now) {
     return;
   }
   refreshHud();
+  if (game.elapsed >= game.nextCard) showCards();
 }
 
 function animateRemoved() {
@@ -270,12 +385,13 @@ function submitScore() {
 function showMenu() {
   game.state = 'menu';
   el('hud').style.display = 'none';
+  el('perks').style.display = 'none';
   el('overlay').style.display = 'flex';
   const buttons = Object.keys(MODES)
     .map((key) => `<button onclick="startGame('${key}')">${MODES[key].label}</button>`)
     .join('');
   el('box').innerHTML = `
-    <h1>🧊 Magico </h1>
+    <h1>🧊 Color Cubes</h1>
     <div class="msg">Remova os cubos da cor pedida antes do tempo acabar.<br>Arraste para girar e clique para remover.</div>
     <h2>Escolha o modo</h2>
     ${buttons}
