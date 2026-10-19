@@ -1,20 +1,63 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Color Cubes 3D</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Removedor de Blocos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
 </head>
 <body>
-<div id="hud">
-  <div>Pontos: <span id="score">0</span></div>
-  <div>Remover: <span id="swatch"></span></div>
-  <div>⏱ <span id="timer">0</span>s</div>
-</div>
-<div id="perks"></div>
-<div id="overlay"><div class="box" id="box"></div></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="main.js"></script>
+  <div id="hud" class="hidden">
+    <div class="card"><small>Pontos</small><b id="score">0</b></div>
+    <div class="card target"><small>Remova</small><span><i id="swatch"></i><b id="tname">-</b></span></div>
+    <div class="card"><small>Tempo</small><b id="time">0</b></div>
+    <div class="card"><small>Blocos</small><b id="left">0</b></div>
+    <div class="card"><small>Combo</small><b id="combo">0</b></div>
+    <div id="perks"></div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <h1>Removedor de Blocos</h1>
+      <p>Remova só os blocos da cor pedida. Errou? Perde pontos e tempo.</p>
+      <input id="name" maxlength="12" placeholder="Seu nome">
+      <div class="row">
+        <button data-mode="easy" class="easy">Easy</button>
+        <button data-mode="medium" class="medium">Medium</button>
+        <button data-mode="hard" class="hard">Hard</button>
+      </div>
+      <h2>Ranking</h2>
+      <table><tbody id="rank"></tbody></table>
+      <button id="clear" class="link">limpar ranking</button>
+    </div>
+  </div>
+
+  <div id="end" class="overlay hidden">
+    <div class="panel">
+      <h1 id="endTitle"></h1>
+      <p id="endText"></p>
+      <div class="row">
+        <button id="again" class="easy">Jogar de novo</button>
+        <button id="back" class="medium">Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cards" class="overlay hidden">
+    <div class="panel">
+      <h1>Escolha uma melhoria</h1>
+      <div id="cardList" class="row"></div>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
